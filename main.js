@@ -41,6 +41,9 @@ class PomodoroTimer {
             orange: null
         };
 
+        // 添加控制器狀態追踪
+        this.controlsEnabled = true;
+
         this.createTimeDisplay();
         this.createTimer();
         this.addLights();
@@ -104,6 +107,33 @@ class PomodoroTimer {
             this.progressSegments.push(segment);
             this.timerBody.add(segment);
         }
+
+        // 修改可點擊的環形區域
+        const ringGeometry = new THREE.RingGeometry(0.7, 0.9, 64);
+        const ringMaterial = new THREE.MeshPhongMaterial({
+            color: 0xFF9800,     // 改為橘色
+            transparent: true,
+            opacity: 0,          // 初始完全透明
+            side: THREE.DoubleSide,
+            depthWrite: false,
+            depthTest: false,
+            blending: THREE.AdditiveBlending
+        });
+        this.clickableRing = new THREE.Mesh(ringGeometry, ringMaterial);
+        this.clickableRing.position.z = 0.254;
+        this.clickableRing.userData.isClickable = true;
+        
+        // 修改懸停效果
+        this.clickableRing.onBeforeRender = () => {
+            if (this.isHovering) {
+                this.clickableRing.material.opacity = 0.3;  // 懸停時才顯示
+                this.clickableRing.material.color.setHex(0xFF9800);  // 保持橘色
+            } else {
+                this.clickableRing.material.opacity = 0;    // 非懸停時完全透明
+            }
+        };
+        
+        this.timerBody.add(this.clickableRing);
     }
 
     createTicks() {
@@ -144,7 +174,7 @@ class PomodoroTimer {
                 
                 // 設置字體
                 ctx.fillStyle = '#333333';
-                ctx.font = 'bold 48px Arial'; // 調整字大小
+                ctx.font = 'bold 48px Arial'; // 調整字體大小
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 
@@ -189,17 +219,15 @@ class PomodoroTimer {
         this.handGroup.position.z = 0.253;
         this.timerBody.add(this.handGroup);
 
-        // 指針 - 調整長度以對齊刻度
+        // 指針
         const handGeometry = new THREE.BoxGeometry(0.8, 0.04, 0.02);
         const handMaterial = new THREE.MeshPhongMaterial({ 
             color: 0x333333
         });
         this.hand = new THREE.Mesh(handGeometry, handMaterial);
         this.hand.geometry.translate(-0.4, 0, 0);
-        
-        // 初始指向12點
         this.hand.rotation.z = -Math.PI / 2;
-        this.isInitialState = true; // 添加狀態標記
+        this.isInitialState = true;
         this.handGroup.add(this.hand);
 
         // 中心圓點
@@ -208,9 +236,6 @@ class PomodoroTimer {
         this.center = new THREE.Mesh(centerGeometry, centerMaterial);
         this.center.rotation.x = Math.PI / 2;
         this.handGroup.add(this.center);
-
-        // 添加初始顯示角度偏移
-        this.initialOffset = Math.PI / 2;
     }
 
     createButtons() {
@@ -260,7 +285,7 @@ class PomodoroTimer {
                 <span id="timeDisplay" style="font-size: 24px;">25:00</span>
             </div>
             <div style="background: rgba(255,255,255,0.8); padding: 10px; border-radius: 5px;">
-                <label>時間倍率: </label>
+                <label>時間倍數: </label>
                 <input type="range" min="1" max="100" value="1" style="width: 100px;">
                 <span>1x</span>
             </div>
@@ -296,7 +321,7 @@ class PomodoroTimer {
     }
 
     addLights() {
-        // 環境
+        // 環
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         this.scene.add(ambientLight);
 
@@ -332,47 +357,64 @@ class PomodoroTimer {
         this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
         
         this.raycaster.setFromCamera(this.mouse, this.camera);
+        // 檢測所有可交互物體
         const intersects = this.raycaster.intersectObjects(this.scene.children, true);
         
         if (intersects.length > 0) {
             const object = intersects[0].object;
             
+            // 檢查是否點擊到按鈕
             if (object.userData.isButton) {
                 this.handleButtonClick(object.userData.buttonType);
                 return;
             }
             
-            if (object.userData.draggable || object.parent.userData.draggable) {
-                this.isDragging = true;
-                this.isRunning = false;
+            // 檢查是否點擊到環形區域
+            if (object === this.clickableRing) {
+                const point = intersects[0].point;
+                // 計算點擊位置相對於表盤中心的角度
+                const angle = Math.atan2(point.y, point.x);
+                let normalizedAngle = (-angle + Math.PI / 2) % (Math.PI * 2);
+                if (normalizedAngle < 0) normalizedAngle += Math.PI * 2;
+                
+                // 將角度吸附到最近的刻度（每5分鐘一個刻度）
+                const snapAngle = Math.round(normalizedAngle / (Math.PI / 30)) * (Math.PI / 30);
+                
+                // 計算並設定新的時間
+                const newTime = Math.floor((snapAngle / (Math.PI * 2)) * 3600);
+                
+                // 更新時間設定
+                this.duration = newTime;
+                this.currentTime = newTime;
+                
+                // 更新指針和進度顯示
+                if (this.isInitialState) {
+                    this.hand.rotation.z = Math.PI;
+                    this.isInitialState = false;
+                }
+                this.initializeProgress();
             }
         }
     }
 
     onMouseMove(event) {
-        if (!this.isDragging) return;
+        this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
         
-        const rect = this.renderer.domElement.getBoundingClientRect();
-        const x = event.clientX - rect.left;
-        const y = event.clientY - rect.top;
+        this.raycaster.setFromCamera(this.mouse, this.camera);
+        const intersects = this.raycaster.intersectObjects([this.clickableRing]);
         
-        const centerX = rect.width / 2;
-        const centerY = rect.height / 2;
-        const angle = Math.atan2(y - centerY, x - centerX);
+        // 更新懸停狀態
+        this.isHovering = intersects.length > 0;
         
-        // 修改角度計算，匹配扇形區域
-        let normalizedAngle = (-angle + Math.PI / 2) % (Math.PI * 2);
-        if (normalizedAngle > Math.PI) {
-            normalizedAngle = Math.PI;
-        }
-        
-        // 設定指針位置，匹配扇形區域
-        const timePosition = (this.currentTime / this.maxDuration) * Math.PI * 2;
-        this.handGroup.rotation.z = Math.PI / 2 - timePosition;
+        // 更新游標樣式
+        document.body.style.cursor = this.isHovering ? 'pointer' : 'default';
     }
 
     onMouseUp() {
-        this.isDragging = false;
+        // 只保留控制器相關代碼
+        this.controlsEnabled = true;
+        this.controls.enabled = true;
     }
 
     handleButtonClick(buttonType) {
@@ -439,16 +481,22 @@ class PomodoroTimer {
         const totalSegments = this.progressSegments.length;
         const initialSegments = Math.floor((this.duration / 3600) * totalSegments);
         
-        // 設定初始指針位置，加上初始偏移
+        // 設定指針位置
         const maxAngle = Math.PI * 2;
         const timePosition = (this.duration / 3600) * maxAngle;
-        // const initialAngle = Math.PI / 2 - timePosition + this.initialOffset;
-        const initialAngle = Math.PI / 2 - timePosition 
+        const initialAngle = Math.PI / 2 - timePosition;
         this.handGroup.rotation.z = initialAngle;
         
+        // 更新扇形區域
         this.progressSegments.forEach((segment, index) => {
             segment.visible = index < initialSegments;
         });
+        
+        // 更新時間顯示
+        const minutes = Math.floor(this.currentTime / 60);
+        const seconds = Math.floor(this.currentTime % 60);
+        this.timeDisplaySpan.textContent = 
+            `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     }
 
     animate() {
@@ -468,7 +516,11 @@ class PomodoroTimer {
             }
         }
 
-        this.controls.update();
+        // 只在控制器啟用時更新
+        if (this.controlsEnabled) {
+            this.controls.update();
+        }
+        
         this.renderer.render(this.scene, this.camera);
     }
 }
