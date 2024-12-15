@@ -11,20 +11,17 @@ class PomodoroTimer {
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(this.renderer.domElement);
 
-        // 修改相機位置和朝向
-        this.camera.position.set(0, 2, 5);
+        // 修改相機位置，使其正對表盤
+        this.camera.position.set(0, 0, 4);
         this.camera.lookAt(0, 0, 0);
 
-        // 修改軌道控制器
         this.controls = new OrbitControls(this.camera, this.renderer.domElement);
         this.controls.enableDamping = true;
         this.controls.dampingFactor = 0.05;
         this.controls.enableZoom = true;
         this.controls.enableRotate = true;
-        this.controls.minDistance = 3;
-        this.controls.maxDistance = 10;
-        this.controls.minPolarAngle = 0;
-        this.controls.maxPolarAngle = Math.PI / 2;
+        this.controls.minDistance = 1;
+        this.controls.maxDistance = 7;
 
         // 射線檢測器
         this.raycaster = new THREE.Raycaster();
@@ -52,14 +49,14 @@ class PomodoroTimer {
     }
 
     createTimer() {
-        // 創建計時器主體
-        const bodyGeometry = new THREE.CylinderGeometry(1, 1, 0.3, 32);
+        // 創建計時器主體 - 方形
+        const bodyGeometry = new THREE.BoxGeometry(2, 2, 0.5);
         const bodyMaterial = new THREE.MeshPhongMaterial({
-            color: 0xCCCCCC,
+            color: 0xFFFFFF,
             flatShading: false
         });
         this.timerBody = new THREE.Mesh(bodyGeometry, bodyMaterial);
-        this.timerBody.rotation.x = 0;
+        // 不需要旋轉時鐘本體，因為相機已經正對它
         this.scene.add(this.timerBody);
 
         this.createDialFace();
@@ -70,8 +67,6 @@ class PomodoroTimer {
     createDialFace() {
         // 表面
         const faceGeometry = new THREE.CircleGeometry(0.9, 64);
-        
-        // 灰色背景 - 調整材���設置
         const greyMaterial = new THREE.MeshPhongMaterial({
             color: 0xEEEEEE,
             side: THREE.DoubleSide,
@@ -79,36 +74,32 @@ class PomodoroTimer {
             depthTest: true
         });
         this.greyFace = new THREE.Mesh(faceGeometry, greyMaterial);
-        this.greyFace.position.y = 0.15;
-        this.greyFace.rotation.x = -Math.PI / 2;
+        this.greyFace.position.z = 0.251;
         this.timerBody.add(this.greyFace);
 
-        // 恢復添加刻度
+        // 創建刻度
         this.createTicks();
 
-        // 綠色進度扇形
-        const segments = 360; // 改為360段，每段代表1度
+        // 綠色進度扇形 - 從12點開始順時針填充
+        const segments = 360;
         this.progressSegments = [];
         
         for (let i = 0; i < segments; i++) {
-            const startAngle = -Math.PI / 2 + (i / segments) * Math.PI * 2;
+            // 這裡的角度計算是關鍵
+            const startAngle = -(i / segments) * Math.PI * 2 + Math.PI / 2;
             const segmentGeometry = new THREE.CircleGeometry(0.9, 1, 
                 startAngle,
-                (1 / segments) * Math.PI * 2);
+                -(1 / segments) * Math.PI * 2); // 負值使其順時針
             const segmentMaterial = new THREE.MeshPhongMaterial({
                 color: 0x4CAF50,
                 side: THREE.DoubleSide,
                 transparent: true,
                 opacity: 0.8,
                 depthWrite: false,
-                depthTest: true,
-                polygonOffset: true,
-                polygonOffsetFactor: -1,
-                polygonOffsetUnits: -1
+                depthTest: true
             });
             const segment = new THREE.Mesh(segmentGeometry, segmentMaterial);
-            segment.position.y = 0.151;
-            segment.rotation.x = -Math.PI / 2;
+            segment.position.z = 0.252;
             segment.visible = false;
             this.progressSegments.push(segment);
             this.timerBody.add(segment);
@@ -116,13 +107,12 @@ class PomodoroTimer {
     }
 
     createTicks() {
-        // 創建刻度
         for (let i = 0; i < 60; i++) {
             const isMainTick = i % 5 === 0;
             const tickGeometry = new THREE.BoxGeometry(
-                0.02,  // 寬度更細
-                0.01,  // 厚度
-                isMainTick ? 0.15 : 0.08  // 主刻度更長
+                0.02,                    // 寬度固定
+                isMainTick ? 0.1 : 0.05, // 長度
+                0.01                     // 厚度
             );
             const tickMaterial = new THREE.MeshPhongMaterial({ 
                 color: 0x333333,
@@ -134,29 +124,82 @@ class PomodoroTimer {
             const angle = (i / 60) * Math.PI * 2;
             const radius = 0.8;
             
-            tick.position.x = Math.sin(angle) * radius;
-            tick.position.z = Math.cos(angle) * radius;
-            tick.position.y = 0.152;
-            tick.rotation.y = angle;
+            tick.position.set(
+                Math.sin(angle) * radius,
+                Math.cos(angle) * radius,
+                0.251
+            );
+            
+            tick.rotation.z = -angle;
             
             this.timerBody.add(tick);
+
+            // 為主刻度添加數字
+            if (isMainTick) {
+                // 創建 canvas
+                const canvas = document.createElement('canvas');
+                canvas.width = 128;
+                canvas.height = 128;
+                const ctx = canvas.getContext('2d');
+                
+                // 設置字體
+                ctx.fillStyle = '#333333';
+                ctx.font = 'bold 48px Arial'; // 調整字大小
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                // 計算分鐘數
+                const minutes = i === 0 ? 0 : i;
+                ctx.fillText(minutes.toString(), 64, 64);
+
+                // 創建貼圖
+                const texture = new THREE.CanvasTexture(canvas);
+                texture.minFilter = THREE.LinearFilter;
+                texture.magFilter = THREE.LinearFilter;
+                
+                // 使用平面幾何體代替 Sprite
+                const textGeometry = new THREE.PlaneGeometry(0.15, 0.15);
+                const textMaterial = new THREE.MeshBasicMaterial({
+                    map: texture,
+                    transparent: true,
+                    depthWrite: false
+                });
+                const textMesh = new THREE.Mesh(textGeometry, textMaterial);
+
+                // 設置數字位置
+                const textRadius = 0.65;
+                const angle = (i / 60) * Math.PI * 2;
+                textMesh.position.set(
+                    Math.sin(angle) * textRadius,
+                    Math.cos(angle) * textRadius,
+                    0.252
+                );
+                
+                // 使數字始終朝向正面
+                textMesh.rotation.z = -angle;
+                
+                this.timerBody.add(textMesh);
+            }
         }
     }
 
     createHandAndKnob() {
         // 指針組
         this.handGroup = new THREE.Group();
-        this.handGroup.position.y = 0.152;
+        this.handGroup.position.z = 0.253;
         this.timerBody.add(this.handGroup);
 
-        // 指針
-        const handGeometry = new THREE.BoxGeometry(0.04, 0.02, 0.7);
+        // 指針 - 調整長度以對齊刻度
+        const handGeometry = new THREE.BoxGeometry(0.8, 0.04, 0.02);
         const handMaterial = new THREE.MeshPhongMaterial({ 
             color: 0x333333
         });
         this.hand = new THREE.Mesh(handGeometry, handMaterial);
-        this.hand.position.z = 0.35;
+        this.hand.geometry.translate(-0.4, 0, 0);
+        
+        // 初始指向12點
         this.hand.rotation.z = -Math.PI / 2;
+        this.isInitialState = true; // 添加狀態標記
         this.handGroup.add(this.hand);
 
         // 中心圓點
@@ -165,30 +208,37 @@ class PomodoroTimer {
         this.center = new THREE.Mesh(centerGeometry, centerMaterial);
         this.center.rotation.x = Math.PI / 2;
         this.handGroup.add(this.center);
+
+        // 添加初始顯示角度偏移
+        this.initialOffset = Math.PI / 2;
     }
 
     createButtons() {
-        // 頂部按鈕
-        const buttonGeometry = new THREE.CylinderGeometry(0.15, 0.15, 0.1, 32);
+        // 綠色按鈕 - 放在上方並朝上
+        const greenButtonGeometry = new THREE.BoxGeometry(0.4, 0.1, 0.15);
         const greenButtonMaterial = new THREE.MeshPhongMaterial({ 
             color: 0x4CAF50,
             emissive: 0x4CAF50,
             emissiveIntensity: 0
         });
+        this.buttons.green = new THREE.Mesh(greenButtonGeometry, greenButtonMaterial);
+        this.buttons.green.position.set(-0.5, 1.05, 0);
+        // 按鈕朝上
+        this.buttons.green.rotation.x = 0;
+        this.buttons.green.userData.isButton = true;
+        this.buttons.green.userData.buttonType = 'green';
+        this.timerBody.add(this.buttons.green);
+
+        // 橙色按鈕 - 放在上方並朝上
+        const orangeButtonGeometry = new THREE.CylinderGeometry(0.1, 0.1, 0.1, 32);
         const orangeButtonMaterial = new THREE.MeshPhongMaterial({ 
             color: 0xFF9800,
             emissive: 0xFF9800,
             emissiveIntensity: 0
         });
-
-        this.buttons.green = new THREE.Mesh(buttonGeometry, greenButtonMaterial);
-        this.buttons.green.position.set(-0.5, 0.2, 0);
-        this.buttons.green.userData.isButton = true;
-        this.buttons.green.userData.buttonType = 'green';
-        this.timerBody.add(this.buttons.green);
-
-        this.buttons.orange = new THREE.Mesh(buttonGeometry, orangeButtonMaterial);
-        this.buttons.orange.position.set(0.5, 0.2, 0);
+        this.buttons.orange = new THREE.Mesh(orangeButtonGeometry, orangeButtonMaterial);
+        this.buttons.orange.position.set(0.5, 1.05, 0);
+        this.buttons.orange.rotation.x = 0;
         this.buttons.orange.userData.isButton = true;
         this.buttons.orange.userData.buttonType = 'orange';
         this.timerBody.add(this.buttons.orange);
@@ -224,6 +274,10 @@ class PomodoroTimer {
         setTimeButton.addEventListener('click', () => {
             const minutes = parseInt(timeInput.value);
             if (minutes >= 1 && minutes <= 60) {
+                if (this.isInitialState) {
+                    this.hand.rotation.z = Math.PI;
+                    this.isInitialState = false;
+                }
                 this.duration = minutes * 60;
                 this.currentTime = this.duration;
                 this.isRunning = false;
@@ -242,7 +296,7 @@ class PomodoroTimer {
     }
 
     addLights() {
-        // 環境���
+        // 環境
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         this.scene.add(ambientLight);
 
@@ -306,10 +360,15 @@ class PomodoroTimer {
         const centerY = rect.height / 2;
         const angle = Math.atan2(y - centerY, x - centerX);
         
-        this.handGroup.rotation.z = angle + Math.PI / 2;
+        // 修改角度計算，匹配扇形區域
+        let normalizedAngle = (-angle + Math.PI / 2) % (Math.PI * 2);
+        if (normalizedAngle > Math.PI) {
+            normalizedAngle = Math.PI;
+        }
         
-        let normalizedAngle = (angle + Math.PI * 2) % (Math.PI * 2);
-        this.currentTime = (1 - (normalizedAngle / (Math.PI * 2))) * this.duration;
+        // 設定指針位置，匹配扇形區域
+        const timePosition = (this.currentTime / this.maxDuration) * Math.PI * 2;
+        this.handGroup.rotation.z = Math.PI / 2 - timePosition;
     }
 
     onMouseUp() {
@@ -319,6 +378,10 @@ class PomodoroTimer {
     handleButtonClick(buttonType) {
         switch (buttonType) {
             case 'green':
+                if (this.isInitialState) {
+                    this.hand.rotation.z = Math.PI;
+                    this.isInitialState = false;
+                }
                 this.isRunning = !this.isRunning;
                 if (this.isRunning) {
                     this.lastTime = Date.now();
@@ -329,6 +392,10 @@ class PomodoroTimer {
                 break;
                 
             case 'orange':
+                if (this.isInitialState) {
+                    this.hand.rotation.z = Math.PI;
+                    this.isInitialState = false;
+                }
                 this.isRunning = false;
                 this.currentTime = this.duration;
                 this.updateHand();
@@ -345,19 +412,23 @@ class PomodoroTimer {
 
     updateHand() {
         const progress = this.currentTime / this.duration;
-        const angle = Math.PI / 2 + (progress * Math.PI * 2);
+        const maxAngle = Math.PI * 2;
+        const timePosition = (this.duration / 3600) * maxAngle;
+        
+        // 使用原有的角度計算，但加上初始偏移
+        const angle = Math.PI / 2 - timePosition * progress;
         
         this.handGroup.rotation.z = angle;
         
-        // 更新進度顯示 - 使用精確的進度值
+        // 更新進度顯示
         const totalSegments = this.progressSegments.length;
-        const exactProgress = this.currentTime / this.maxDuration;
-        const visibleSegments = Math.floor(exactProgress * totalSegments);
+        const visibleSegments = Math.floor((this.currentTime / 3600) * totalSegments);
         
         this.progressSegments.forEach((segment, index) => {
             segment.visible = index < visibleSegments;
         });
 
+        // 更新時間顯示
         const minutes = Math.floor(this.currentTime / 60);
         const seconds = Math.floor(this.currentTime % 60);
         this.timeDisplaySpan.textContent = 
@@ -366,7 +437,14 @@ class PomodoroTimer {
 
     initializeProgress() {
         const totalSegments = this.progressSegments.length;
-        const initialSegments = Math.floor((this.duration / this.maxDuration) * totalSegments);
+        const initialSegments = Math.floor((this.duration / 3600) * totalSegments);
+        
+        // 設定初始指針位置，加上初始偏移
+        const maxAngle = Math.PI * 2;
+        const timePosition = (this.duration / 3600) * maxAngle;
+        // const initialAngle = Math.PI / 2 - timePosition + this.initialOffset;
+        const initialAngle = Math.PI / 2 - timePosition 
+        this.handGroup.rotation.z = initialAngle;
         
         this.progressSegments.forEach((segment, index) => {
             segment.visible = index < initialSegments;
@@ -382,7 +460,7 @@ class PomodoroTimer {
             this.lastTime = now;
 
             this.currentTime = Math.max(0, this.currentTime - delta);
-            this.updateHand(); // 每幀都更新進度顯示
+            this.updateHand();
 
             if (this.currentTime <= 0) {
                 this.isRunning = false;
