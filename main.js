@@ -460,11 +460,11 @@ class PomodoroTimer {
             }
         };
 
-        // 添加時間控制
+        // 修改時間控制
         this.TICK_CONTROL = {
             lastTickTime: 0,
-            nextTickTime: 0,
-            interval: 1000  // 固定1秒間隔
+            interval: 1000,  // 固定1秒間隔
+            accumulated: 0   // 累積的時間
         };
 
         this.createTimer();
@@ -610,7 +610,7 @@ class PomodoroTimer {
         // 修改懸停效果
         this.clickableRing.onBeforeRender = () => {
             if (this.isHovering) {
-                this.clickableRing.material.opacity = 0.3;  // 懸停時才顯示
+                this.clickableRing.material.opacity = 0.3;  // 懸停時才��示
                 this.clickableRing.material.color.setHex(this.COLORS.RING.HOVER);  // 保持橘色
             } else {
                 this.clickableRing.material.opacity = 0;    // 非懸停時完全透明
@@ -1052,7 +1052,7 @@ class PomodoroTimer {
 
         // 修改重置按鈕事件
         resetCamera.addEventListener('click', () => {
-            // ... 原有的位置重置��碼 ...
+            // ... 原有的位置重置碼 ...
             cameraRotX.value = this.CAMERA_POSITION.DEFAULT.ROTATION.X;
             cameraRotY.value = this.CAMERA_POSITION.DEFAULT.ROTATION.Y;
             updateCameraRotation();
@@ -1204,7 +1204,7 @@ class PomodoroTimer {
             // 調整吸附角度為30秒間隔
             const snapAngle = Math.round(normalizedAngle / (Math.PI / 60)) * (Math.PI / 60);
             
-            // 計算時間（每個刻度��表30秒）
+            // 計算時間（每個刻度代表30秒）
             const totalSeconds = Math.floor((snapAngle / (Math.PI * 2)) * 3600);
             const snappedSeconds = Math.round(totalSeconds / 30) * 30;
             
@@ -1429,44 +1429,30 @@ class PomodoroTimer {
         this.timeDisplaySpan.textContent = 
             `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
         
-        // 重置滴答控制
-        this.TICK_CONTROL.nextTickTime = 0;
+        // 重置時間控制
+        this.TICK_CONTROL.accumulated = 0;
     }
 
     // 生成滴答聲
     playTickSound() {
         if (this.isMuted) return;
         
-        const now = Date.now();
+        const oscillator = this.audioContext.createOscillator();
+        const gainNode = this.audioContext.createGain();
         
-        // 初始化下一個滴答時間
-        if (this.TICK_CONTROL.nextTickTime === 0) {
-            this.TICK_CONTROL.nextTickTime = now + this.TICK_CONTROL.interval;
-            return;
-        }
+        oscillator.connect(gainNode);
+        gainNode.connect(this.audioContext.destination);
         
-        // 檢查是否到達下一個滴答時間
-        if (now >= this.TICK_CONTROL.nextTickTime) {
-            const oscillator = this.audioContext.createOscillator();
-            const gainNode = this.audioContext.createGain();
-            
-            oscillator.connect(gainNode);
-            gainNode.connect(this.audioContext.destination);
-            
-            oscillator.frequency.value = this.SOUNDS.TICK.frequency;
-            gainNode.gain.value = 0.05;
-            
-            gainNode.gain.exponentialRampToValueAtTime(
-                0.01,
-                this.audioContext.currentTime + this.SOUNDS.TICK.duration
-            );
-            
-            oscillator.start();
-            oscillator.stop(this.audioContext.currentTime + this.SOUNDS.TICK.duration);
-            
-            // 更新下一個滴答時間
-            this.TICK_CONTROL.nextTickTime = now + this.TICK_CONTROL.interval;
-        }
+        oscillator.frequency.value = this.SOUNDS.TICK.frequency;
+        gainNode.gain.value = 0.05;
+        
+        gainNode.gain.exponentialRampToValueAtTime(
+            0.01,
+            this.audioContext.currentTime + this.SOUNDS.TICK.duration
+        );
+        
+        oscillator.start();
+        oscillator.stop(this.audioContext.currentTime + this.SOUNDS.TICK.duration);
     }
 
     // 停止警報聲
@@ -1523,19 +1509,26 @@ class PomodoroTimer {
             const now = Date.now();
             const delta = (now - this.lastTime);
             
-            if (delta >= this.UPDATE_INTERVAL) {  // 每秒更新一次
+            if (delta >= this.UPDATE_INTERVAL) {
                 this.lastTime = now - (delta % this.UPDATE_INTERVAL);
+                
+                // 累積時間
+                this.TICK_CONTROL.accumulated += this.UPDATE_INTERVAL;
+                
+                // 檢查是否需要播放滴答聲
+                if (this.TICK_CONTROL.accumulated >= this.TICK_CONTROL.interval) {
+                    this.TICK_CONTROL.accumulated = 0;  // 重置累積時間
+                    
+                    // 播放倒數音效
+                    if (this.currentTime > 0) {
+                        this.playTickSound();
+                    }
+                }
                 
                 const timeDecrement = (this.UPDATE_INTERVAL / 1000) * this.timeScale;
                 this.currentTime = Math.max(0, this.currentTime - timeDecrement);
                 
-                // 每秒更新一次指針和扇形區域
                 this.updateHand();
-
-                // 播放倒數音效
-                if (this.currentTime > 0) {
-                    this.playTickSound();
-                }
 
                 if (this.currentTime <= 0) {
                     this.isRunning = false;
@@ -1543,7 +1536,6 @@ class PomodoroTimer {
                     this.isFlashing = true;
                     this.flashStartTime = Date.now();
                     this.lastBlinkTime = Date.now();
-                    // 播放時間音效
                     this.playAlarmSound();
                 }
             }
