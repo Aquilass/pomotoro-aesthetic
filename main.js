@@ -26,15 +26,15 @@ class PomodoroTimer {
         this.controls.enableDamping = true;
         this.controls.dampingFactor = 0.05;
         this.controls.enableZoom = true;
+        this.controls.enablePan = false;
         this.controls.enableRotate = true;
-        this.controls.minDistance = 1;
-        this.controls.maxDistance = 7;
-
-        // 修改控制器限制 - 限制在俯視範圍內
-        // this.controls.minPolarAngle = Math.PI / 3;     // 60度
-        // this.controls.maxPolarAngle = Math.PI / 2.5;   // 約72度
-        // this.controls.minAzimuthAngle = -Math.PI / 2;  // -30度
-        // this.controls.maxAzimuthAngle = Math.PI / 6;   // 30度
+        this.controls.minPolarAngle = Math.PI / 4;
+        this.controls.maxPolarAngle = Math.PI / 2.2;
+        this.controls.minAzimuthAngle = -Math.PI / 4;
+        this.controls.maxAzimuthAngle = Math.PI / 4;
+        this.controls.minDistance = 2;
+        this.controls.maxDistance = 5;
+        this.controls.target.set(0, 0, 0);
 
         // 射線檢測器
         this.raycaster = new THREE.Raycaster();
@@ -235,7 +235,6 @@ class PomodoroTimer {
             TICK: {
                 frequency: 1000,    // 滴答聲頻率
                 duration: 0.05,     // 持續時間（秒）
-                interval: 1000      // 間隔時間（毫秒）
             },
             ALARM: {
                 frequencies: [800, 1000],  // 警報聲頻率
@@ -245,8 +244,8 @@ class PomodoroTimer {
             }
         };
 
-        // 上一次播放音效的時間
-        this.lastTickTime = 0;
+        // 上一次播放時間
+        this.lastTickTime = Date.now();
 
         // 儲存當前的警報音效點
         this.currentAlarmNodes = [];
@@ -393,7 +392,7 @@ class PomodoroTimer {
             `
         };
 
-        // 在 constructor 中添加顏色主題配置
+        // 在 constructor 中添加顏色��題配置
         this.COLOR_THEMES = {
             GREEN: {
                 TIMER: {
@@ -460,11 +459,11 @@ class PomodoroTimer {
             }
         };
 
-        // 修改時間控制
+        // 添加時間控制
         this.TICK_CONTROL = {
             lastTickTime: 0,
-            interval: 1000,  // 固定1秒間隔
-            accumulated: 0   // 累積的時間
+            nextTickTime: 0,
+            interval: 1000  // 固定1秒間隔
         };
 
         this.createTimer();
@@ -610,7 +609,7 @@ class PomodoroTimer {
         // 修改懸停效果
         this.clickableRing.onBeforeRender = () => {
             if (this.isHovering) {
-                this.clickableRing.material.opacity = 0.3;  // 懸停時才��示
+                this.clickableRing.material.opacity = 0.3;  // 懸停時才顯示
                 this.clickableRing.material.color.setHex(this.COLORS.RING.HOVER);  // 保持橘色
             } else {
                 this.clickableRing.material.opacity = 0;    // 非懸停時完全透明
@@ -1361,7 +1360,7 @@ class PomodoroTimer {
                     `;
                 } else {
                     notification.innerHTML = `
-                        已解除靜音
+                        解除靜音
                         <span class="en">Sound Unmuted</span>
                     `;
                 }
@@ -1429,30 +1428,37 @@ class PomodoroTimer {
         this.timeDisplaySpan.textContent = 
             `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
         
-        // 重置時間控制
-        this.TICK_CONTROL.accumulated = 0;
+        // 重置滴答控制
+        this.TICK_CONTROL.nextTickTime = 0;
     }
 
     // 生成滴答聲
     playTickSound() {
         if (this.isMuted) return;
         
-        const oscillator = this.audioContext.createOscillator();
-        const gainNode = this.audioContext.createGain();
-        
-        oscillator.connect(gainNode);
-        gainNode.connect(this.audioContext.destination);
-        
-        oscillator.frequency.value = this.SOUNDS.TICK.frequency;
-        gainNode.gain.value = 0.05;
-        
-        gainNode.gain.exponentialRampToValueAtTime(
-            0.01,
-            this.audioContext.currentTime + this.SOUNDS.TICK.duration
-        );
-        
-        oscillator.start();
-        oscillator.stop(this.audioContext.currentTime + this.SOUNDS.TICK.duration);
+        const now = Date.now();
+        // 確保每秒只播放一次，使用精確的時間控制
+        if (now >= this.TICK_CONTROL.nextTickTime) {
+            const oscillator = this.audioContext.createOscillator();
+            const gainNode = this.audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(this.audioContext.destination);
+            
+            oscillator.frequency.value = this.SOUNDS.TICK.frequency;
+            gainNode.gain.value = 0.05;
+            
+            gainNode.gain.exponentialRampToValueAtTime(
+                0.01,
+                this.audioContext.currentTime + this.SOUNDS.TICK.duration
+            );
+            
+            oscillator.start();
+            oscillator.stop(this.audioContext.currentTime + this.SOUNDS.TICK.duration);
+            
+            // 更新下一次播放時間
+            this.TICK_CONTROL.nextTickTime = now + this.TICK_CONTROL.interval;
+        }
     }
 
     // 停止警報聲
@@ -1512,23 +1518,16 @@ class PomodoroTimer {
             if (delta >= this.UPDATE_INTERVAL) {
                 this.lastTime = now - (delta % this.UPDATE_INTERVAL);
                 
-                // 累積時間
-                this.TICK_CONTROL.accumulated += this.UPDATE_INTERVAL;
-                
-                // 檢查是否需要播放滴答聲
-                if (this.TICK_CONTROL.accumulated >= this.TICK_CONTROL.interval) {
-                    this.TICK_CONTROL.accumulated = 0;  // 重置累積時間
-                    
-                    // 播放倒數音效
-                    if (this.currentTime > 0) {
-                        this.playTickSound();
-                    }
-                }
-                
                 const timeDecrement = (this.UPDATE_INTERVAL / 1000) * this.timeScale;
                 this.currentTime = Math.max(0, this.currentTime - timeDecrement);
                 
+                // 更新指針和扇形區域
                 this.updateHand();
+
+                // 播放倒數音效 - 只要時間大於0就播放
+                if (this.currentTime > 0) {
+                    this.playTickSound();
+                }
 
                 if (this.currentTime <= 0) {
                     this.isRunning = false;
@@ -1536,6 +1535,7 @@ class PomodoroTimer {
                     this.isFlashing = true;
                     this.flashStartTime = Date.now();
                     this.lastBlinkTime = Date.now();
+                    // 播放時間音效
                     this.playAlarmSound();
                 }
             }
