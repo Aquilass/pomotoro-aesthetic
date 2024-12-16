@@ -12,12 +12,12 @@ class PomodoroTimer {
         document.body.appendChild(this.renderer.domElement);
 
         // 修改相機位置和角度 - 調整為俯視角度
-        this.camera.position.set(0.2, 1.5, 4); // 相機位置調整到右上方
+        this.camera.position.set(0.75, 2.9, 2); // 相機位置調整到右上方
         this.camera.lookAt(0, 0, 0);
 
         // 添加初始旋轉角度設置
         this.INITIAL_ROTATION = {
-            X: -Math.PI / 15,  // 向後傾斜 15 度
+            X: -Math.PI / 11,  // 向後傾斜 15 度
             Y: -Math.PI / 360,  // 向右旋轉 15 度
             Z: 0
         };
@@ -282,8 +282,174 @@ class PomodoroTimer {
         `;
         document.head.appendChild(style);
 
-        this.createTimeDisplay();
+        // 在 constructor 中添加自訂文字的配置
+        this.CUSTOM_TEXT = {
+            POSITION: {
+                X: -0.65,
+                Y: 1.1,
+                Z: this.Z_INDEX.NUMBERS + 0.01
+            },
+            SIZE: {
+                WIDTH: 1,
+                HEIGHT: 0.25
+            },
+            STYLE: {
+                FONT: '48px Arial',
+                COLOR: this.COLOR_CONFIG.TIMER_GREEN.CSS,  // 使用與其他文字相同的顏色配置
+                ALIGN: 'left'
+            }
+        };
+
+        // 在 constructor 中添加相機位置的配置
+        this.CAMERA_POSITION = {
+            DEFAULT: {
+                X: 0.75,
+                Y: 2.9,
+                Z: 2,
+                ROTATION: {
+                    X: -Math.PI / 11,  // 向後傾斜
+                    Y: -Math.PI / 360  // 向右旋轉
+                }
+            },
+            RANGE: {
+                X: { MIN: -5, MAX: 5 },
+                Y: { MIN: 0, MAX: 5 },
+                Z: { MIN: 0, MAX: 5 },
+                ROTATION: {
+                    X: { MIN: -Math.PI / 2, MAX: 0 },    // -90° 到 0°
+                    Y: { MIN: -Math.PI / 2, MAX: Math.PI / 2 }  // -90° 到 90°
+                }
+            }
+        };
+
+        // 修改 SETTINGS_PANEL 的 HTML
+        this.SETTINGS_PANEL = {
+            HTML: `
+                <div class="settings-panel" style="display: none; position: fixed; top: 20px; left: 20px; z-index: 100;">
+                    <div style="background: rgba(255,255,255,0.8); padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+                        <h3 style="margin: 0 0 10px 0;">主題設定</h3>
+                        <select id="themeSelect" style="width: 100%; padding: 5px;">
+                            <option value="GREEN">綠色主題</option>
+                            <option value="BLUE">藍色主題</option>
+                            <option value="DARK">深色主題</option>
+                        </select>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.8); padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+                        <h3 style="margin: 0 0 10px 0;">相機設定</h3>
+                        <div style="margin-bottom: 5px;">
+                            <label>X 位置: </label>
+                            <input type="range" id="cameraX" min="${this.CAMERA_POSITION.RANGE.X.MIN}" max="${this.CAMERA_POSITION.RANGE.X.MAX}" step="0.1" value="${this.CAMERA_POSITION.DEFAULT.X}" style="width: 150px;">
+                            <span id="cameraXValue">${this.CAMERA_POSITION.DEFAULT.X}</span>
+                        </div>
+                        <div style="margin-bottom: 5px;">
+                            <label>Y 位置: </label>
+                            <input type="range" id="cameraY" min="${this.CAMERA_POSITION.RANGE.Y.MIN}" max="${this.CAMERA_POSITION.RANGE.Y.MAX}" step="0.1" value="${this.CAMERA_POSITION.DEFAULT.Y}" style="width: 150px;">
+                            <span id="cameraYValue">${this.CAMERA_POSITION.DEFAULT.Y}</span>
+                        </div>
+                        <div style="margin-bottom: 5px;">
+                            <label>Z 位置: </label>
+                            <input type="range" id="cameraZ" min="${this.CAMERA_POSITION.RANGE.Z.MIN}" max="${this.CAMERA_POSITION.RANGE.Z.MAX}" step="0.1" value="${this.CAMERA_POSITION.DEFAULT.Z}" style="width: 150px;">
+                            <span id="cameraZValue">${this.CAMERA_POSITION.DEFAULT.Z}</span>
+                        </div>
+                        <div style="margin-bottom: 5px;">
+                            <label>後傾角度: </label>
+                            <input type="range" id="cameraRotX" min="${this.CAMERA_POSITION.RANGE.ROTATION.X.MIN}" max="${this.CAMERA_POSITION.RANGE.ROTATION.X.MAX}" step="0.01" value="${this.CAMERA_POSITION.DEFAULT.ROTATION.X}" style="width: 150px;">
+                            <span id="cameraRotXValue">${(this.CAMERA_POSITION.DEFAULT.ROTATION.X * 180 / Math.PI).toFixed(1)}°</span>
+                        </div>
+                        <div style="margin-bottom: 5px;">
+                            <label>右轉角度: </label>
+                            <input type="range" id="cameraRotY" min="${this.CAMERA_POSITION.RANGE.ROTATION.Y.MIN}" max="${this.CAMERA_POSITION.RANGE.ROTATION.Y.MAX}" step="0.01" value="${this.CAMERA_POSITION.DEFAULT.ROTATION.Y}" style="width: 150px;">
+                            <span id="cameraRotYValue">${(this.CAMERA_POSITION.DEFAULT.ROTATION.Y * 180 / Math.PI).toFixed(1)}°</span>
+                        </div>
+                        <button id="resetCamera">重置相機設定</button>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.8); padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+                        <label>自訂文字: </label>
+                        <input type="text" id="customText" placeholder="輸入文字" value="Oscar Dev" style="width: 120px; margin-right: 10px;">
+                        <button id="setCustomText">設定</button>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.8); padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+                        <label>預設設定時間: </label>
+                        <input type="number" min="1" max="60" value="25" style="width: 60px;"> 分鐘
+                        <button id="setTime">設定</button>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.8); padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+                        <span id="timeDisplay" style="font-size: 24px;">25:00</span>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.8); padding: 10px; border-radius: 5px; margin-bottom: 10px;">
+                        <label>時間倍數: </label>
+                        <input type="range" min="1" max="100" value="1" style="width: 100px;">
+                        <span>1x</span>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.8); padding: 10px; border-radius: 5px;">
+                        <button id="muteButton" style="padding: 5px 10px;">
+                            <span id="muteIcon">🔊</span> 聲音
+                        </button>
+                    </div>
+                </div>
+                <button id="settingsToggle" style="position: fixed; top: 20px; right: 20px; z-index: 101; padding: 10px; background: rgba(255,255,255,0.8); border-radius: 5px; cursor: pointer;">
+                    ⚙️ 設定
+                </button>
+            `
+        };
+
+        // 在 constructor 中添加顏色主題配置
+        this.COLOR_THEMES = {
+            GREEN: {
+                TIMER: {
+                    HEX: 0x517561,
+                    RGB: '81, 117, 97',
+                    CSS: '#517561'
+                },
+                SCHEME: {
+                    BACKGROUND: 0xdeb58a,    // 背景色
+                    BOX: 0xdbcdc7,          // 盒子顏色
+                    FACE: 0xeeecef,         // 表盤顏色
+                    PROGRESS: 0x517561,      // 進度條顏色
+                    HAND: 0x202020,         // 指針顏色
+                    CENTER_KNOB: 0xdeb58a,  // 中心旋鈕顏色
+                    BACKGROUND_RING: 0xeeecef // 背景環形顏色
+                }
+            },
+            BLUE: {
+                TIMER: {
+                    HEX: 0x4a6b8a,
+                    RGB: '74, 107, 138',
+                    CSS: '#4a6b8a'
+                },
+                SCHEME: {
+                    BACKGROUND: 0xf5e6d3,
+                    BOX: 0xe2e8f0,
+                    FACE: 0xffffff,
+                    PROGRESS: 0x4a6b8a,
+                    HAND: 0x2d3748,
+                    CENTER_KNOB: 0xb7a084,
+                    BACKGROUND_RING: 0xffffff
+                }
+            },
+            DARK: {
+                TIMER: {
+                    HEX: 0x6b7280,
+                    RGB: '107, 114, 128',
+                    CSS: '#6b7280'
+                },
+                SCHEME: {
+                    BACKGROUND: 0x1a1a1a,
+                    BOX: 0x2d2d2d,
+                    FACE: 0x333333,
+                    PROGRESS: 0x6b7280,
+                    HAND: 0xffffff,
+                    CENTER_KNOB: 0x4a5568,
+                    BACKGROUND_RING: 0x333333
+                }
+            }
+        };
+
+        // 設置當前主題
+        this.currentTheme = 'GREEN';
+
         this.createTimer();
+        this.createTimeDisplay();
         this.addLights();
         this.setupEventListeners();
         this.animate();
@@ -357,7 +523,7 @@ class PomodoroTimer {
         // 添加背景環形區域
         const backgroundRingGeometry = new THREE.RingGeometry(
             this.RADIUS.BACKGROUND_RING.INNER,  // 使用設定的內半徑
-            this.RADIUS.BACKGROUND_RING.OUTER,  // 使用設定的外半徑
+            this.RADIUS.BACKGROUND_RING.OUTER,  // 使用定的外半徑
             64    // 分段數
         );
         const backgroundRingMaterial = new THREE.MeshPhongMaterial({
@@ -558,7 +724,7 @@ class PomodoroTimer {
     createRoundedRectShape(width, height, radius) {
         const shape = new THREE.Shape();
         
-        // 從左上角開始，順時針繪製
+        // 從左上角開始，順時針製
         shape.moveTo(-width/2 + radius, -height/2);
         shape.lineTo(width/2 - radius, -height/2);
         shape.quadraticCurveTo(width/2, -height/2, width/2, -height/2 + radius);
@@ -611,7 +777,7 @@ class PomodoroTimer {
         this.buttons.green.userData.buttonType = 'green';
         this.timerBody.add(this.buttons.green);
 
-        // 橙色按鈕 - 使用圓柱體但添加斜角
+        // 橙色按鈕 - 使用圓體但添加斜角
         const orangeButtonGeometry = new THREE.CylinderGeometry(
             this.SIZE.BUTTONS.ORANGE.RADIUS,
             this.SIZE.BUTTONS.ORANGE.RADIUS,
@@ -688,31 +854,78 @@ class PomodoroTimer {
 
     createTimeDisplay() {
         const container = document.createElement('div');
-        container.style.position = 'fixed';
-        container.style.top = '20px';
-        container.style.left = '20px';
-        container.style.zIndex = '100';
-        container.innerHTML = `
-            <div style="background: rgba(255,255,255,0.8); padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                <label>設定時間: </label>
-                <input type="number" min="1" max="60" value="25" style="width: 60px;"> 分鐘
-                <button id="setTime">設定</button>
-            </div>
-            <div style="background: rgba(255,255,255,0.8); padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                <span id="timeDisplay" style="font-size: 24px;">25:00</span>
-            </div>
-            <div style="background: rgba(255,255,255,0.8); padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                <label>時間倍數: </label>
-                <input type="range" min="1" max="100" value="1" style="width: 100px;">
-                <span>1x</span>
-            </div>
-            <div style="background: rgba(255,255,255,0.8); padding: 10px; border-radius: 5px;">
-                <button id="muteButton" style="padding: 5px 10px;">
-                    <span id="muteIcon">🔊</span> 聲音
-                </button>
-            </div>
-        `;
+        container.innerHTML = this.SETTINGS_PANEL.HTML;
         document.body.appendChild(container);
+
+        // 添加設定面板的顯示/隱藏功能
+        const settingsPanel = document.querySelector('.settings-panel');
+        const settingsToggle = document.querySelector('#settingsToggle');
+        
+        settingsToggle.addEventListener('click', () => {
+            const isHidden = settingsPanel.style.display === 'none';
+            settingsPanel.style.display = isHidden ? 'block' : 'none';
+        });
+
+        // 添加文字顯示的 3D 物件
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 128;
+        const ctx = canvas.getContext('2d');
+        
+        const texture = new THREE.CanvasTexture(canvas);
+        const geometry = new THREE.PlaneGeometry(
+            this.CUSTOM_TEXT.SIZE.WIDTH,
+            this.CUSTOM_TEXT.SIZE.HEIGHT
+        );
+        const material = new THREE.MeshLambertMaterial({
+            map: texture,
+            transparent: true,
+            opacity: 1,
+            side: THREE.DoubleSide,
+            depthTest: false,
+            depthWrite: false,
+            color: new THREE.Color(this.COLOR_CONFIG.TIMER_GREEN.HEX),
+            emissive: new THREE.Color(this.COLOR_CONFIG.TIMER_GREEN.HEX),
+            emissiveIntensity: 0.1
+        });
+        
+        this.customTextMesh = new THREE.Mesh(geometry, material);
+        this.customTextMesh.renderOrder = 9999;
+        this.customTextMesh.position.set(
+            this.CUSTOM_TEXT.POSITION.X,
+            this.CUSTOM_TEXT.POSITION.Y,
+            this.CUSTOM_TEXT.POSITION.Z
+        );
+        
+        if (this.timerBody) {
+            this.timerBody.add(this.customTextMesh);
+        }
+
+        // 更新文字的函數
+        const updateCustomText = (text) => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = this.CUSTOM_TEXT.STYLE.COLOR;
+            ctx.font = this.CUSTOM_TEXT.STYLE.FONT;
+            ctx.textAlign = this.CUSTOM_TEXT.STYLE.ALIGN;
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, 10, canvas.height/2);
+            
+            ctx.strokeStyle = this.CUSTOM_TEXT.STYLE.COLOR;
+            ctx.lineWidth = 2;
+            ctx.strokeText(text, 10, canvas.height/2);
+            
+            texture.needsUpdate = true;
+        };
+
+        // 添加文字設定按鈕的事件監聽，並立即顯示預設文字
+        const textInput = container.querySelector('#customText');
+        const setTextButton = container.querySelector('#setCustomText');
+        setTextButton.addEventListener('click', () => {
+            updateCustomText(textInput.value);
+        });
+
+        // 立即顯示預設文字
+        updateCustomText('Oscar Dev');
 
         const timeInput = container.querySelector('input[type="number"]');
         const setTimeButton = container.querySelector('#setTime');
@@ -770,6 +983,70 @@ class PomodoroTimer {
             this.isMuted = !this.isMuted;
             muteIcon.textContent = this.isMuted ? '🔇' : '🔊';
         });
+
+        // 添加相機位置控制
+        const cameraX = container.querySelector('#cameraX');
+        const cameraY = container.querySelector('#cameraY');
+        const cameraZ = container.querySelector('#cameraZ');
+        const cameraXValue = container.querySelector('#cameraXValue');
+        const cameraYValue = container.querySelector('#cameraYValue');
+        const cameraZValue = container.querySelector('#cameraZValue');
+        const resetCamera = container.querySelector('#resetCamera');
+
+        const updateCameraPosition = () => {
+            const x = parseFloat(cameraX.value);
+            const y = parseFloat(cameraY.value);
+            const z = parseFloat(cameraZ.value);
+            this.camera.position.set(x, y, z);
+            cameraXValue.textContent = x.toFixed(2);
+            cameraYValue.textContent = y.toFixed(2);
+            cameraZValue.textContent = z.toFixed(2);
+        };
+
+        cameraX.addEventListener('input', updateCameraPosition);
+        cameraY.addEventListener('input', updateCameraPosition);
+        cameraZ.addEventListener('input', updateCameraPosition);
+
+        resetCamera.addEventListener('click', () => {
+            cameraX.value = this.CAMERA_POSITION.DEFAULT.X;
+            cameraY.value = this.CAMERA_POSITION.DEFAULT.Y;
+            cameraZ.value = this.CAMERA_POSITION.DEFAULT.Z;
+            updateCameraPosition();
+        });
+
+        const cameraRotX = container.querySelector('#cameraRotX');
+        const cameraRotY = container.querySelector('#cameraRotY');
+        const cameraRotXValue = container.querySelector('#cameraRotXValue');
+        const cameraRotYValue = container.querySelector('#cameraRotYValue');
+
+        const updateCameraRotation = () => {
+            const rotX = parseFloat(cameraRotX.value);
+            const rotY = parseFloat(cameraRotY.value);
+            
+            this.timerBody.rotation.x = rotX;
+            this.timerBody.rotation.y = rotY;
+            
+            cameraRotXValue.textContent = `${(rotX * 180 / Math.PI).toFixed(1)}°`;
+            cameraRotYValue.textContent = `${(rotY * 180 / Math.PI).toFixed(1)}°`;
+        };
+
+        cameraRotX.addEventListener('input', updateCameraRotation);
+        cameraRotY.addEventListener('input', updateCameraRotation);
+
+        // 修改重置按鈕事件
+        resetCamera.addEventListener('click', () => {
+            // ... 原有的位置重置代碼 ...
+            cameraRotX.value = this.CAMERA_POSITION.DEFAULT.ROTATION.X;
+            cameraRotY.value = this.CAMERA_POSITION.DEFAULT.ROTATION.Y;
+            updateCameraRotation();
+        });
+
+        // 添加主題切換功能
+        const themeSelect = container.querySelector('#themeSelect');
+        themeSelect.addEventListener('change', (e) => {
+            this.currentTheme = e.target.value;
+            this.applyTheme(this.currentTheme);
+        });
     }
 
     addLights() {
@@ -809,7 +1086,7 @@ class PomodoroTimer {
         this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
         
         this.raycaster.setFromCamera(this.mouse, this.camera);
-        // 檢測所有可交互物體
+        // 檢測所可交互物體
         const intersects = this.raycaster.intersectObjects(this.scene.children, true);
         
         if (intersects.length > 0) {
@@ -890,7 +1167,7 @@ class PomodoroTimer {
             // 調整吸附角度為30秒間隔
             const snapAngle = Math.round(normalizedAngle / (Math.PI / 60)) * (Math.PI / 60);
             
-            // 計算時間（每個度代表30秒）
+            // 計算時間（每個���代表30秒）
             const totalSeconds = Math.floor((snapAngle / (Math.PI * 2)) * 3600);
             const snappedSeconds = Math.round(totalSeconds / 30) * 30;
             
@@ -934,7 +1211,7 @@ class PomodoroTimer {
     }
 
     handleButtonClick(buttonType) {
-        // 在任何按鈕點擊時停止警報聲和閃爍
+        // 在任何按鈕時停止警報聲和閃爍
         this.stopAlarmSound();
         this.stopFlashing();  // 添加停止閃爍
         
@@ -993,7 +1270,7 @@ class PomodoroTimer {
                 if (minutes >= 1 && minutes <= 60) {
                     this.duration = minutes * 60;
                     this.currentTime = this.duration;
-                    this.isRunning = true;  // 立即開始計時
+                    this.isRunning = true  // 立即開始計時
                     this.lastTime = Date.now();
                     this.updateHand();
                     this.initializeProgress();
@@ -1011,7 +1288,7 @@ class PomodoroTimer {
                 break;
                 
             case 'back':
-                // 切換靜��狀態
+                // 切換靜音狀態
                 this.isMuted = !this.isMuted;
                 
                 // 更新按鈕顏色
@@ -1158,7 +1435,7 @@ class PomodoroTimer {
         let startTime = this.audioContext.currentTime;
         const endTime = startTime + 30; // 30秒後結束
         
-        // 計算需要重複的次數以達到30秒
+        // 計算需要重複次數以達到30秒
         const cycleTime = this.SOUNDS.ALARM.interval * 2; // 兩個頻率的總時間
         const cycles = Math.ceil(30 / cycleTime);
         
@@ -1266,6 +1543,36 @@ class PomodoroTimer {
         this.progressSegments.forEach(segment => {
             segment.material.emissiveIntensity = 0;
         });
+    }
+
+    // 添加應用主題的方法
+    applyTheme(themeName) {
+        const theme = this.COLOR_THEMES[themeName];
+        
+        // 更新顏色配置
+        this.COLOR_CONFIG.TIMER_GREEN = theme.TIMER;
+        this.COLORS = {
+            ...this.COLORS,
+            ...theme.SCHEME
+        };
+
+        // 更新場景背景色
+        this.scene.background = new THREE.Color(theme.SCHEME.BACKGROUND);
+
+        // 更新各個元件的顏色
+        this.timerBody.material.color.setHex(theme.SCHEME.BOX);
+        this.greyFace.material.color.setHex(theme.SCHEME.FACE);
+        this.hand.material.color.setHex(theme.SCHEME.HAND);
+        this.center.material.color.setHex(theme.SCHEME.CENTER_KNOB);
+        this.backgroundRing.material.color.setHex(theme.SCHEME.BACKGROUND_RING);
+
+        // 更新進度條顏色
+        this.progressSegments.forEach(segment => {
+            segment.material.color.setHex(theme.SCHEME.PROGRESS);
+        });
+
+        // 更新刻度和數字顏色
+        // ... 根據需要更新其他元件的顏色
     }
 }
 
