@@ -3834,7 +3834,7 @@ void main() {
                         </select>
                     </div>
                     <div style="background: rgba(255,255,255,0.8); padding: 10px; border-radius: 5px; margin-bottom: 10px;">
-                        <h3 style="margin: 0 0 10px 0;">��機設定</h3>
+                        <h3 style="margin: 0 0 10px 0;">相機設定</h3>
                         <div style="margin-bottom: 5px;">
                             <label>X 位置: </label>
                             <input type="range" id="cameraX" min="${this.CAMERA_POSITION.RANGE.X.MIN}" max="${this.CAMERA_POSITION.RANGE.X.MAX}" step="0.1" value="${this.CAMERA_POSITION.DEFAULT.X}" style="width: 150px;">
