@@ -77,8 +77,8 @@ class PomodoroTimer {
                 },
                 POSITION_Y: 1.15,  // 按鈕Y軸位置
                 BACK: {
-                    WIDTH: 0.175,
-                    HEIGHT: 0.175,
+                    WIDTH: 0.1,
+                    HEIGHT: 0.1,
                     DEPTH: 0.05
                 }
             },
@@ -234,25 +234,25 @@ class PomodoroTimer {
         this.SOUNDS = {
             TICK: {
                 frequency: 1000,    // 滴答聲頻率
-                duration: 0.05      // 持續時間（秒）
+                duration: 0.05,     // 持續時間（秒）
+                interval: 1000      // 間隔時間（毫秒）
             },
             ALARM: {
                 frequencies: [800, 1000],  // 警報聲頻率
-                duration: 0.2,             // 每的持續時間
-                interval: 0.3,             // 音與音之間的間隔
-                totalDuration: 30000       // 總持續時間（30秒）
+                duration: 0.1,            // 每個音的持續時間
+                interval: 0.5,            // 音與音之間的間隔
+                totalDuration: 30000      // 總持續時間（30秒）
             }
         };
 
         // 上一次播放音效的時間
         this.lastTickTime = 0;
-        this.TICK_INTERVAL = 1000; // 音效間隔（毫秒）
 
         // 儲存當前的警報音效點
         this.currentAlarmNodes = [];
 
         // 添加靜音狀態
-        this.isMuted = false;
+        this.isMuted = true;
 
         // 添加通知樣式
         const style = document.createElement('style');
@@ -325,7 +325,7 @@ class PomodoroTimer {
         // 修改 SETTINGS_PANEL 的 HTML
         this.SETTINGS_PANEL = {
             HTML: `
-                <div class="settings-panel" style="display: none; position: fixed; top: 20px; left: 20px; z-index: 100;">
+                <div class="settings-panel" style="display: none; position: fixed; top: 20px; left: 20px; z-index: 100; max-width: 90vw;">
                     <div style="background: rgba(255,255,255,0.8); padding: 10px; border-radius: 5px; margin-bottom: 10px;">
                         <h3 style="margin: 0 0 10px 0;">主題設定</h3>
                         <select id="themeSelect" style="width: 100%; padding: 5px;">
@@ -387,7 +387,7 @@ class PomodoroTimer {
                         </button>
                     </div>
                 </div>
-                <button id="settingsToggle" style="position: fixed; top: 20px; right: 20px; z-index: 101; padding: 10px; background: rgba(255,255,255,0.8); border-radius: 5px; cursor: pointer;">
+                <button id="settingsToggle" style="position: fixed; top: 20px; right: 20px; z-index: 101; padding: 10px; background: rgba(255,255,255,0.8); border-radius: 5px; cursor: pointer; font-size: ${this.isTouchDevice ? '24px' : '16px'};">
                     ⚙️ 設定
                 </button>
             `
@@ -448,6 +448,25 @@ class PomodoroTimer {
         // 設置當前主題
         this.currentTheme = 'GREEN';
 
+        // 添加觸控支援標誌
+        this.isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+        // 添加響應式設計的配置
+        this.RESPONSIVE = {
+            BREAKPOINT: 768,  // 手機斷點
+            SCALE: {
+                MOBILE: 0.7,  // 手機版縮放比例
+                DESKTOP: 1    // 桌面版縮放比例
+            }
+        };
+
+        // 添加時間控制
+        this.TICK_CONTROL = {
+            lastTickTime: 0,
+            nextTickTime: 0,
+            interval: 1000  // 固定1秒間隔
+        };
+
         this.createTimer();
         this.createTimeDisplay();
         this.addLights();
@@ -486,7 +505,7 @@ class PomodoroTimer {
             metalness: 0.1,
             roughness: 0.5,
             transparent: true,  // 添加透明屬性
-            opacity: 1         // 設置透明度為0
+            opacity: 1         // 置透明度為0
         });
 
         this.timerBody = new THREE.Mesh(bodyGeometry, bodyMaterial);
@@ -522,8 +541,8 @@ class PomodoroTimer {
 
         // 添加背景環形區域
         const backgroundRingGeometry = new THREE.RingGeometry(
-            this.RADIUS.BACKGROUND_RING.INNER,  // 使用設定的內半徑
-            this.RADIUS.BACKGROUND_RING.OUTER,  // 使用定的外半徑
+            this.RADIUS.BACKGROUND_RING.INNER,  // 使用設定的內徑
+            this.RADIUS.BACKGROUND_RING.OUTER,  // 使用定的半徑
             64    // 分段數
         );
         const backgroundRingMaterial = new THREE.MeshPhongMaterial({
@@ -543,7 +562,7 @@ class PomodoroTimer {
         this.createTicks();
 
         // 綠色進度扇形 - 從12點開始順時針填充
-        const segments = 360;
+        const segments = 3600;
         this.progressSegments = [];
         
         for (let i = 0; i < segments; i++) {
@@ -724,7 +743,7 @@ class PomodoroTimer {
     createRoundedRectShape(width, height, radius) {
         const shape = new THREE.Shape();
         
-        // 從左上角開始，順時針製
+        // 從左上角開始順時針製
         shape.moveTo(-width/2 + radius, -height/2);
         shape.lineTo(width/2 - radius, -height/2);
         shape.quadraticCurveTo(width/2, -height/2, width/2, -height/2 + radius);
@@ -830,11 +849,9 @@ class PomodoroTimer {
 
         const backButtonGeometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
         const backButtonMaterial = new THREE.MeshPhongMaterial({ 
-            color: this.COLORS.BUTTONS.BACK.BASE.UNMUTED,
-            emissive: this.COLORS.BUTTONS.BACK.EMISSIVE.UNMUTED,
-            emissiveIntensity: 0,
-            shininess: 30,
-            specular: 0x444444
+            color: this.COLORS.BUTTONS.BACK.BASE.MUTED,  // 使用靜音狀態的顏色
+            emissive: this.COLORS.BUTTONS.BACK.EMISSIVE.MUTED,
+            emissiveIntensity: 0
         });
 
         this.buttons.back = new THREE.Mesh(backButtonGeometry, backButtonMaterial);
@@ -1035,7 +1052,7 @@ class PomodoroTimer {
 
         // 修改重置按鈕事件
         resetCamera.addEventListener('click', () => {
-            // ... 原有的位置重置代碼 ...
+            // ... 原有的位置重置��碼 ...
             cameraRotX.value = this.CAMERA_POSITION.DEFAULT.ROTATION.X;
             cameraRotY.value = this.CAMERA_POSITION.DEFAULT.ROTATION.Y;
             updateCameraRotation();
@@ -1067,15 +1084,35 @@ class PomodoroTimer {
     }
 
     setupEventListeners() {
-        // 添加鼠事件聽
-        this.renderer.domElement.addEventListener('mousedown', this.onMouseDown.bind(this));
-        this.renderer.domElement.addEventListener('mousemove', this.onMouseMove.bind(this));
-        this.renderer.domElement.addEventListener('mouseup', this.onMouseUp.bind(this));
-        
+        // 原有的鼠事件
+        if (!this.isTouchDevice) {
+            this.renderer.domElement.addEventListener('mousedown', this.onMouseDown.bind(this));
+            this.renderer.domElement.addEventListener('mousemove', this.onMouseMove.bind(this));
+            this.renderer.domElement.addEventListener('mouseup', this.onMouseUp.bind(this));
+        }
+
+        // 添加觸控事件
+        this.renderer.domElement.addEventListener('touchstart', this.onTouchStart.bind(this));
+        this.renderer.domElement.addEventListener('touchmove', this.onTouchMove.bind(this));
+        this.renderer.domElement.addEventListener('touchend', this.onTouchEnd.bind(this));
+
+        // 響應式調整
         window.addEventListener('resize', () => {
-            this.camera.aspect = window.innerWidth / window.innerHeight;
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            const scale = width < this.RESPONSIVE.BREAKPOINT ? 
+                this.RESPONSIVE.SCALE.MOBILE : 
+                this.RESPONSIVE.SCALE.DESKTOP;
+
+            this.camera.aspect = width / height;
             this.camera.updateProjectionMatrix();
-            this.renderer.setSize(window.innerWidth, window.innerHeight);
+            this.renderer.setSize(width, height);
+
+            // 調整相機位置以適應不同螢幕大小
+            if (width < this.RESPONSIVE.BREAKPOINT) {
+                this.camera.position.multiplyScalar(scale);
+                this.camera.lookAt(0, 0, 0);
+            }
         });
     }
 
@@ -1167,7 +1204,7 @@ class PomodoroTimer {
             // 調整吸附角度為30秒間隔
             const snapAngle = Math.round(normalizedAngle / (Math.PI / 60)) * (Math.PI / 60);
             
-            // 計算時間（每個���代表30秒）
+            // 計算時間（每個刻度��表30秒）
             const totalSeconds = Math.floor((snapAngle / (Math.PI * 2)) * 3600);
             const snappedSeconds = Math.round(totalSeconds / 30) * 30;
             
@@ -1351,12 +1388,12 @@ class PomodoroTimer {
         const maxAngle = Math.PI * 2;
         const timePosition = (this.duration / 3600) * maxAngle;
         
-        // 使用原有的角度計算，但加初始移
+        // 使用原有的角度計算
         const angle = Math.PI / 2 - timePosition * progress;
         
         this.handGroup.rotation.z = angle;
         
-        // 更進度條顯示
+        // 更新進度條顯示 - 修改計算方式
         const totalSegments = this.progressSegments.length;
         const visibleSegments = Math.floor((this.currentTime / 3600) * totalSegments);
         
@@ -1381,7 +1418,7 @@ class PomodoroTimer {
         const initialAngle = Math.PI / 2 - timePosition;
         this.handGroup.rotation.z = initialAngle;
         
-        // 更新扇形區域
+        // 更新扇形區
         this.progressSegments.forEach((segment, index) => {
             segment.visible = index < initialSegments;
         });
@@ -1391,13 +1428,25 @@ class PomodoroTimer {
         const seconds = Math.floor(this.currentTime % 60);
         this.timeDisplaySpan.textContent = 
             `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        
+        // 重置滴答控制
+        this.TICK_CONTROL.nextTickTime = 0;
     }
 
     // 生成滴答聲
     playTickSound() {
         if (this.isMuted) return;
+        
         const now = Date.now();
-        if (now - this.lastTickTime >= this.TICK_INTERVAL) {
+        
+        // 初始化下一個滴答時間
+        if (this.TICK_CONTROL.nextTickTime === 0) {
+            this.TICK_CONTROL.nextTickTime = now + this.TICK_CONTROL.interval;
+            return;
+        }
+        
+        // 檢查是否到達下一個滴答時間
+        if (now >= this.TICK_CONTROL.nextTickTime) {
             const oscillator = this.audioContext.createOscillator();
             const gainNode = this.audioContext.createGain();
             
@@ -1405,9 +1454,8 @@ class PomodoroTimer {
             gainNode.connect(this.audioContext.destination);
             
             oscillator.frequency.value = this.SOUNDS.TICK.frequency;
-            gainNode.gain.value = 0.1;  // 音量控制
+            gainNode.gain.value = 0.05;
             
-            // 設量淡出
             gainNode.gain.exponentialRampToValueAtTime(
                 0.01,
                 this.audioContext.currentTime + this.SOUNDS.TICK.duration
@@ -1416,7 +1464,8 @@ class PomodoroTimer {
             oscillator.start();
             oscillator.stop(this.audioContext.currentTime + this.SOUNDS.TICK.duration);
             
-            this.lastTickTime = now;
+            // 更新下一個滴答時間
+            this.TICK_CONTROL.nextTickTime = now + this.TICK_CONTROL.interval;
         }
     }
 
@@ -1474,11 +1523,13 @@ class PomodoroTimer {
             const now = Date.now();
             const delta = (now - this.lastTime);
             
-            if (delta >= this.UPDATE_INTERVAL) {
+            if (delta >= this.UPDATE_INTERVAL) {  // 每秒更新一次
                 this.lastTime = now - (delta % this.UPDATE_INTERVAL);
                 
                 const timeDecrement = (this.UPDATE_INTERVAL / 1000) * this.timeScale;
                 this.currentTime = Math.max(0, this.currentTime - timeDecrement);
+                
+                // 每秒更新一次指針和扇形區域
                 this.updateHand();
 
                 // 播放倒數音效
@@ -1511,7 +1562,7 @@ class PomodoroTimer {
                     const intensity = this.greyFace.material.emissiveIntensity > 0 ? 
                         this.FLASH.INTENSITY.NORMAL : this.FLASH.INTENSITY.FLASH;
                     
-                    // 更新表盤和進度的發光強度
+                    // 更新表盤進度的發光強度
                     this.greyFace.material.emissive = new THREE.Color(0xFFFFFF);
                     this.greyFace.material.emissiveIntensity = intensity;
                     this.progressSegments.forEach(segment => {
@@ -1573,6 +1624,34 @@ class PomodoroTimer {
 
         // 更新刻度和數字顏色
         // ... 根據需要更新其他元件的顏色
+    }
+
+    // 觸控事件處理
+    onTouchStart(event) {
+        event.preventDefault();
+        const touch = event.touches[0];
+        const rect = this.renderer.domElement.getBoundingClientRect();
+        
+        this.mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+        this.mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+        
+        this.onMouseDown({ clientX: touch.clientX, clientY: touch.clientY, preventDefault: () => {} });
+    }
+
+    onTouchMove(event) {
+        event.preventDefault();
+        const touch = event.touches[0];
+        const rect = this.renderer.domElement.getBoundingClientRect();
+        
+        this.mouse.x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+        this.mouse.y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+        
+        this.onMouseMove({ clientX: touch.clientX, clientY: touch.clientY });
+    }
+
+    onTouchEnd(event) {
+        event.preventDefault();
+        this.onMouseUp();
     }
 }
 
